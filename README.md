@@ -1,6 +1,6 @@
-# IjasahKuliahNFT Smart Contract
+# CertifyChain Smart Contract
 
-This project implements an ERC-721 NFT smart contract for managing university diploma certificates (ijazah) on the blockchain. The contract handles the authentication flow for universities and students as shown in the project diagram.
+This project implements an ERC-721 NFT smart contract for managing university diploma certificates on the blockchain. The CertifyChain contract enables a secure authentication and verification flow for universities and students.
 
 ## Features
 
@@ -60,26 +60,26 @@ npx hardhat run scripts/interact.js --network localhost
 
 ## Contract Flow
 
-The contract implements the flow shown in the diagram:
+The CertifyChain contract implements a secure authentication and verification flow:
 
-1. **AUTH**: Access control for administrators
-2. **Login By Address**: University authentication by address
-3. **Check Address/Whitelist**: Verification of whitelisted addresses
-4. **University Upload**: Universities can mint certificates as NFTs
-5. **Connect Wallet**: Students connect their wallets to view their certificates
-6. **Wallet & Email Whitelist**: Only whitelisted wallets can receive certificates
+1. **Access Control**: Administrators can register universities
+2. **University Authentication**: Universities have special permissions via role-based access
+3. **Whitelist Verification**: Only approved addresses can receive certificates
+4. **Certificate Minting**: Universities can mint certificates as NFTs for their students
+5. **Wallet Connection**: Students connect their wallets to view their credentials
+6. **Certificate Verification**: Anyone can verify the authenticity of certificates
 
 ## Usage Example
 
 ```javascript
 // Register a university (admin only)
-await ijasahContract.registerUniversity(universityAddress, "University Name");
+await certifyChain.registerUniversity(universityAddress, "University Name");
 
 // Whitelist a student (university only)
-await ijasahContract.connect(university).whitelistAddress(studentAddress);
+await certifyChain.connect(university).whitelistAddress(studentAddress);
 
 // Mint a certificate (university only)
-await ijasahContract.connect(university).mintCertificate(
+await certifyChain.connect(university).mintCertificate(
   studentAddress,
   "ipfs://metadata-uri",
   "Student Name",
@@ -89,6 +89,6 @@ await ijasahContract.connect(university).mintCertificate(
 );
 
 // View a certificate (anyone)
-const certificateId = await ijasahContract.getStudentCertificate(studentAddress);
-const certificateDetails = await ijasahContract.getCertificateDetails(certificateId);
+const certificateId = await certifyChain.getStudentCertificate(studentAddress);
+const certificateDetails = await certifyChain.getCertificateDetails(certificateId);
 ```
