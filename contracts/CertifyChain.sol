@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: MIT  // Ini adalah identifikasi lisensi standar MIT
+//SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;  // Menentukan versi kompiler Solidity yang digunakan (versi 0.8.9 atau lebih tinggi)
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";  // Mengimpor kontrak dasar ERC721 NFT
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";  // Ekstensi untuk menyimpan URI metadata
 import "@openzeppelin/contracts/access/AccessControl.sol";  // Mengimpor fitur kontrol akses berbasis peran
-import "@openzeppelin/contracts/utils/Counters.sol";  // Utilitas penghitung untuk ID token
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";  // Utilitas penghitung untuk ID token
 
 /**
  * @title CertifyChain
@@ -12,9 +12,9 @@ import "@openzeppelin/contracts/utils/Counters.sol";  // Utilitas penghitung unt
  * Alur meliputi: Auth, Login by Address, Verifikasi Whitelist, 
  * Upload oleh Universitas, dan Tampilan oleh Mahasiswa/Publik
  */
-contract CertifyChain is ERC721, ERC721URIStorage, AccessControl {  // Kontrak utama yang mewarisi ERC721, ERC721URIStorage, dan AccessControl
-    using Counters for Counters.Counter;  // Menggunakan library Counters untuk tipe data Counter
-    Counters.Counter private _tokenIdCounter;  // Penghitung ID token yang unik
+contract CertifyChain is ERC721, ERC721URIStorage, AccessControl, ERC721Burnable {  // Kontrak utama yang mewarisi ERC721, ERC721URIStorage, dan AccessControl
+ // Menggunakan library Counters untuk tipe data Counter
+    uint256 private _nextTokenId;  // Penghitung ID token yang unik
 
     // Mendefinisikan peran-peran dalam sistem
     bytes32 public constant UNIVERSITY_ROLE = keccak256("UNIVERSITY_ROLE");  // Peran untuk universitas (dapat menerbitkan ijazah)
@@ -30,7 +30,9 @@ contract CertifyChain is ERC721, ERC721URIStorage, AccessControl {  // Kontrak u
     mapping(address => uint256) public studentCertificate;  // Pemetaan alamat mahasiswa ke tokenId ijazah
 
     // Memetakan tokenId ke detail sertifikat
-    struct Certificate {  // Struktur data untuk menyimpan detail sertifikat
+    struct Certificate {
+        string id;
+        string nim;  // Struktur data untuk menyimpan detail sertifikat
         string studentName;  // Nama mahasiswa
         string universityName;  // Nama universitas
         uint256 graduationYear;  // Tahun kelulusan
@@ -49,6 +51,55 @@ contract CertifyChain is ERC721, ERC721URIStorage, AccessControl {  // Kontrak u
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);  // Memberikan peran admin default ke pengirim (deployer)
         _grantRole(ADMIN_ROLE, msg.sender);  // Memberikan peran ADMIN ke pengirim (deployer)
     }
+
+     function generateCertificateID(address student, uint256 tokenId) internal pure returns (string memory) {
+    // Contoh ID: "CERT-0xABC123...-1"
+    return string(
+        abi.encodePacked(
+            "CERT-",
+            toAsciiString(student),
+            "-",
+            uint2str(tokenId)
+        )
+    );
+}
+
+    function toAsciiString(address x) internal pure returns (string memory) {
+    bytes memory s = new bytes(42);
+    s[0] = '0';
+    s[1] = 'x';
+    for (uint256 i = 0; i < 20; i++) {
+        bytes1 b = bytes1(uint8(uint256(uint160(x)) / (2**(8*(19 - i)))));
+        bytes1 hi = bytes1(uint8(b) / 16);
+        bytes1 lo = bytes1(uint8(b) - 16 * uint8(hi));
+        s[2+i*2] = char(hi);
+        s[3+i*2] = char(lo);            
+    }
+    return string(s);
+}
+
+function char(bytes1 b) internal pure returns (bytes1 c) {
+    if (uint8(b) < 10) return bytes1(uint8(b) + 0x30);
+    else return bytes1(uint8(b) + 0x57);
+}
+
+function uint2str(uint256 _i) internal pure returns (string memory str) {
+    if (_i == 0) return "0";
+    uint256 j = _i;
+    uint256 length;
+    while (j != 0) {
+        length++;
+        j /= 10;
+    }
+    bytes memory bstr = new bytes(length);
+    uint256 k = length;
+    while (_i != 0) {
+        k = k-1;
+        bstr[k] = bytes1(uint8(48 + _i % 10));
+        _i /= 10;
+    }
+    str = string(bstr);
+}
 
     /**
      * @dev Mendaftarkan universitas baru dengan hak untuk menerbitkan ijazah
@@ -83,7 +134,8 @@ contract CertifyChain is ERC721, ERC721URIStorage, AccessControl {  // Kontrak u
      * @param major Jurusan/bidang studi
      */
     function mintCertificate(
-        address to,  // Alamat penerima
+        address to,
+        string memory nim,  // Alamat penerima
         string memory tokenURI,  // URI metadata
         string memory studentName,  // Nama mahasiswa
         string memory universityName,  // Nama universitas
@@ -92,16 +144,16 @@ contract CertifyChain is ERC721, ERC721URIStorage, AccessControl {  // Kontrak u
     ) public onlyRole(UNIVERSITY_ROLE) {  // Hanya universitas yang dapat memanggil fungsi ini
         require(isWhitelisted[to], "Student address is not whitelisted");  // Memastikan alamat mahasiswa sudah dalam whitelist
         require(studentToUniversity[to] == msg.sender, "Student not registered with this university");  // Memastikan mahasiswa terdaftar di universitas ini
-        
-        uint256 tokenId = _tokenIdCounter.current();  // Mendapatkan ID token berikutnya
-        _tokenIdCounter.increment();  // Menambah penghitung token
+          // Menambah penghitung token
+          uint256 tokenId = _nextTokenId++;
         
         _safeMint(to, tokenId);  // Menerbitkan NFT ke alamat mahasiswa
         _setTokenURI(tokenId, tokenURI);  // Menetapkan URI metadata
-        
         // Menyimpan detail sertifikat
         certificates[tokenId] = Certificate({
+            id:generateCertificateID(to, tokenId),
             studentName: studentName,
+            nim: nim,
             universityName: universityName,
             graduationYear: graduationYear,
             major: major,
@@ -117,6 +169,8 @@ contract CertifyChain is ERC721, ERC721URIStorage, AccessControl {  // Kontrak u
      * @dev Mendapatkan detail sertifikat berdasarkan tokenId
      */
     function getCertificateDetails(uint256 tokenId) public view returns (
+        string memory id,
+        string memory nim,
         string memory studentName,  // Nama mahasiswa
         string memory universityName,  // Nama universitas
         uint256 graduationYear,  // Tahun kelulusan
@@ -124,7 +178,9 @@ contract CertifyChain is ERC721, ERC721URIStorage, AccessControl {  // Kontrak u
         bool isVerified  // Status verifikasi
     ) {
         Certificate memory cert = certificates[tokenId];  // Mengambil data sertifikat
-        return (  // Mengembalikan semua detail sertifikat
+        return (
+            cert.id,
+            cert.nim,  // Mengembalikan semua detail sertifikat
             cert.studentName,  // Nama mahasiswa
             cert.universityName,  // Nama universitas
             cert.graduationYear,  // Tahun kelulusan
@@ -148,8 +204,8 @@ contract CertifyChain is ERC721, ERC721URIStorage, AccessControl {  // Kontrak u
     }
 
     // Override yang diperlukan untuk ERC721URIStorage
-    function _burn(uint256 tokenId) internal override(ERC721, ERC721URIStorage) {
-        super._burn(tokenId);  // Memanggil fungsi _burn dari kontrak induk
+    function hapus(uint256 tokenId) internal {
+        burn(tokenId);
     }
 
     function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
@@ -159,7 +215,7 @@ contract CertifyChain is ERC721, ERC721URIStorage, AccessControl {  // Kontrak u
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, AccessControl)  // Fungsi override dari kedua kontrak induk
+        override(AccessControl, ERC721, ERC721URIStorage)  // Fungsi override dari kedua kontrak induk
         returns (bool)
     {
         return super.supportsInterface(interfaceId);  // Memanggil fungsi dari kontrak induk
